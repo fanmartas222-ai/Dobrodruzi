@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#173f35"><title>Dobrodruzi</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--g:#173f35;--m:#e7f1e9;--bg:#faf8f0;--ink:#20312b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px system-ui}
+header{background:var(--g);color:white;padding:22px 18px}header h1{margin:0;font-size:27px}
+header p{margin:5px 0 0;color:#d7e8dc;font-size:14px}
+nav{display:flex;gap:8px;padding:12px;background:white;position:sticky;top:0;z-index:500}
+nav button{flex:1;border:0;border-radius:12px;padding:12px 5px;background:#edf1ec;color:var(--g);font-weight:700}
+nav button.active,.btn{background:var(--g);color:white}
+main{padding:16px;max-width:760px;margin:auto}.panel{display:none}.panel.active{display:block}
+.card,.hero{border-radius:18px;padding:16px;margin-bottom:14px}.card{background:white;box-shadow:0 3px 14px #253a2c0d}
+.hero{background:var(--m)}.hero h2{margin:5px 0 8px}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#718078;font-weight:800}
+.row{display:flex;gap:10px;flex-wrap:wrap}.btn{border:0;border-radius:12px;padding:13px 16px;font-weight:750;font-size:15px;flex:1}
+.secondary{background:#e8eee9;color:var(--g)}.muted{color:#718078;font-size:14px}
+#map{height:50vh;min-height:320px;border-radius:16px;overflow:hidden}
+.creatures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.creature{background:white;border-radius:16px;padding:14px;text-align:center;border:1px solid #e7ebe6}
+.emoji{font-size:40px}.creature strong{display:block;margin:5px}.locked{filter:grayscale(1);opacity:.48}
+.stat{font-size:26px;font-weight:800;color:var(--g)}footer{text-align:center;color:#87938c;font-size:12px;padding:20px}
+</style></head>
+<body>
+<header><h1>🌲 DOBRODRUZI</h1><p>Každý výlet je nové dobrodružství.</p></header>
+<nav><button class="active" data-tab="mapa">🗺️ Mapa</button><button data-tab="ulovky">🏆 Úlovky</button><button data-tab="profil">🧭 Profil</button></nav>
+<main>
+<section id="mapa" class="panel active">
+<div class="hero"><div class="eyebrow">Rodinné dobrodružství</div><h2>Kam vyrazíme dnes?</h2>
+<p>Vydejte se ven a objevujte nová místa. Na každém výletě můžete najít nového tvora.</p>
+<div class="row"><button class="btn" id="locate">📍 Ukázat naši polohu</button><button class="btn" id="discover">✨ Objevit tvora</button></div>
+<p id="status" class="muted" aria-live="polite">Povolte polohu, až budete venku na výletě.</p></div>
+<div class="card"><div class="eyebrow">Vaše mapa</div><div id="map"></div><p class="muted">Podklad OpenStreetMap.</p></div>
+<div class="card"><strong>Import kešek z c:geo</strong><p class="muted">Vyberte GPX soubor s waypointy (body kešek). Body se zobrazí na mapě.</p><input type="file" id="gpx" accept=".gpx,application/gpx+xml"></div>
+</section>
+<section id="ulovky" class="panel"><div class="hero"><div class="eyebrow">Společná rodinná sbírka</div><h2>Naši tvorové</h2><p id="collectionCount">Zatím žádný úlovek. Vyrazte ven!</p></div><div id="creatures" class="creatures"></div></section>
+<section id="profil" class="panel"><div class="card"><div class="eyebrow">Rodinný profil</div><h2 id="rank">Turista začátečník</h2><p class="muted">Hodnost roste s počtem různých míst, na kterých objevíte tvory.</p><div class="stat" id="places">0</div><div class="muted">objevených míst</div></div>
+<div class="card"><strong>Jak to funguje</strong><p>1. Vyrazte s rodinou ven.</p><p>2. Zapněte polohu a klepněte na „Objevit tvora“.</p><p>3. Pokud jste na novém místě (alespoň 500 m od předchozího objevu), získáte tvora do společné sbírky.</p>
+<p class="muted">První funkční prototyp. Sbírka se zatím ukládá pouze v tomto prohlížeči a nesynchronizuje se mezi telefony.</p><button class="btn secondary" id="reset">Vymazat místní sbírku</button></div></section>
+</main><footer>DOBRODRUZI · První prototyp</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const animals=[['🦊','Liška Bystrouška','Lesní průzkumnice'],['🦉','Sova Moudřenka','Noční pozorovatelka'],['🦔','Ježek Bodlinka','Malý cestovatel'],['🦌','Jelen Horal','Pán lesních stezek'],['🐿️','Veverka Skokanka','Mistryně výprav'],['🐸','Žabka Rosnička','Strážkyně tůní'],['🦋','Motýl Závojíček','Barevný tulák'],['🐻','Medvěd Brumla','Velký dobrodruh'],['🐦','Ptáček Poutník','Zpěvák cest'],['🐺','Vlk Šedivák','Samotář hor']];
+const KEY='dobrodruzi_v1';let data=JSON.parse(localStorage.getItem(KEY)||'{"caught":[],"places":[]}');let map,marker;
+function save(){localStorage.setItem(KEY,JSON.stringify(data));render()}
+function render(){document.getElementById('collectionCount').textContent='Získáno '+data.caught.length+' z '+animals.length+' tvorů';document.getElementById('places').textContent=data.places.length;let n=data.places.length;document.getElementById('rank').textContent=n>=30?'Legendární dobrodruh':n>=15?'Mistr dobrodruh':n>=7?'Zkušený dobrodruh':n>=3?'Pokročilý turista':'Turista začátečník';document.getElementById('creatures').innerHTML=animals.map((a,i)=>'<div class="creature '+(data.caught.includes(i)?'':'locked')+'"><div class="emoji">'+(data.caught.includes(i)?a[0]:'❔')+'</div><strong>'+(data.caught.includes(i)?a[1]:'Neobjevený tvor')+'</strong><small class="muted">'+(data.caught.includes(i)?a[2]:'Vydejte se na výlet!')+'</small></div>').join('')}
+function initMap(){if(!window.L||map)return;map=L.map('map').setView([49.8,15.5],7);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map)}
+function say(t){document.getElementById('status').textContent=t}
+function distance(a,b){const R=6371000,p=Math.PI/180,d1=(b.lat-a.lat)*p,d2=(b.lng-a.lng)*p,x=Math.sin(d1/2)**2+Math.cos(a.lat*p)*Math.cos(b.lat*p)*Math.sin(d2/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+function locate(){if(!navigator.geolocation){say('Tento prohlížeč neumí zjistit polohu.');return}say('Zjišťuji polohu…');navigator.geolocation.getCurrentPosition(pos=>{let p={lat:pos.coords.latitude,lng:pos.coords.longitude};initMap();map.setView([p.lat,p.lng],15);if(marker)marker.remove();marker=L.marker([p.lat,p.lng]).addTo(map).bindPopup('Tady jste vy').openPopup();window.currentPos=p;say('Poloha nalezena. Teď můžete objevit tvora!')},()=>say('Polohu se nepodařilo získat. Povolte přístup k poloze a zkuste to znovu.'),{enableHighAccuracy:true,timeout:12000})}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.panel').forEach(x=>x.classList.toggle('active',x.id===b.dataset.tab));if(b.dataset.tab==='mapa'&&map)setTimeout(()=>map.invalidateSize(),100)});
+document.getElementById('locate').onclick=locate;
+document.getElementById('discover').onclick=()=>{if(!window.currentPos){say('Nejdříve klepněte na „Ukázat naši polohu“.');return}let p=window.currentPos;if(data.places.some(x=>distance(x,p)<500)){say('Tady už jste tvora objevili. Zkuste jiné místo alespoň 500 m daleko.');return}let available=animals.map((a,i)=>i).filter(i=>!data.caught.includes(i));if(!available.length){say('Gratulujeme! Objevili jste všechny tvory.');return}let i=available[Math.floor(Math.random()*available.length)];data.caught.push(i);data.places.push(p);save();say('🎉 Nový úlovek: '+animals[i][0]+' '+animals[i][1]+'! Přidán do rodinné sbírky.');L.popup().setLatLng([p.lat,p.lng]).setContent('🎉 '+animals[i][0]+' '+animals[i][1]).openOn(map)};
+document.getElementById('gpx').onchange=async e=>{let f=e.target.files[0];if(!f)return;let xml=new DOMParser().parseFromString(await f.text(),'text/xml'),pts=[...xml.getElementsByTagName('wpt')];if(!pts.length){say('V souboru nejsou GPX waypointy (wpt).');return}initMap();pts.forEach(w=>{let name=w.getElementsByTagName('name')[0]?.textContent||'Keška';L.marker([+w.getAttribute('lat'),+w.getAttribute('lon')]).addTo(map).bindPopup('📦 '+name)});map.fitBounds(pts.map(w=>[+w.getAttribute('lat'),+w.getAttribute('lon')]));say('Načteno '+pts.length+' bodů kešek.')};
+document.getElementById('reset').onclick=()=>{if(confirm('Opravdu vymazat celou sbírku v tomto prohlížeči?')){data={caught:[],places:[]};save();say('Místní sbírka byla vymazána.')}};
+initMap();render();if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+</script></body></html>
